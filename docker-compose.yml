@@ -9,7 +9,6 @@ services:
       - 1000:80
     volumes:
       - .:/var/www/developers
-      - ./.docker/nginx/nginx.conf:/etc/nginx/nginx.conf
       - ./.docker/nginx/ddc.conf:/etc/nginx/conf.d/ddc.conf
       - ./.docker/nginx/ssl.conf:/etc/nginx/ssl.conf
       - /etc/letsencrypt/live/dclm.org:/var/keys/dclm.org
