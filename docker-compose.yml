@@ -10,8 +10,6 @@ services:
     volumes:
       - .:/var/www/developers
       - ./.docker/nginx/ddc.conf:/etc/nginx/conf.d/ddc.conf
-      - ./.docker/nginx/ssl.conf:/etc/nginx/ssl.conf
-      - /etc/letsencrypt/live/dclm.org:/var/keys/dclm.org
     restart: always
     depends_on:
       - php8.1
