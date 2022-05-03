@@ -1,15 +1,30 @@
+# Services
 services:
 
-  ddc.nginx:
+  # Nginx Service
+  nginx1.21:
     container_name: nginx1.21
     image: opeoniye/nginx:1.21
     ports:
       - 1000:80
       - 4443:443
     volumes:
-      - .:/var/www
+      - .:/var/www/developers
       - ./.docker/nginx/nginx.conf:/etc/nginx/nginx.conf
-      - ./.docker/nginx/testify.conf:/etc/nginx/conf.d/testify.conf
+      - ./.docker/nginx/ddc.conf:/etc/nginx/conf.d/ddc.conf
       - ./.docker/nginx/ssl.conf:/etc/nginx/ssl.conf
       - /etc/letsencrypt/live/dclm.org:/var/keys/dclm.org
+    restart: always
+    depends_on:
+      - php8.1
+
+  # PHP8.1 Service
+  php8.1:
+    container_name: php8.1
+    image: opeoniye/php-fpm:8.1
+    working_dir: /var/www/developers
+    volumes:
+      - .:/var/www/developers
+      - ./.docker/php8.1/php.ini:/usr/local/etc/php/php.ini
+      - ./.docker/php8.1/uploads.ini:/usr/local/etc/php/conf.d/uploads.ini
     restart: always
