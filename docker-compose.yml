@@ -3,20 +3,20 @@ services:
 
   # Nginx Service
   nginx1.21:
-    container_name: nginx1.21
+    container_name: ddc_nginx
     image: opeoniye/nginx:1.21
     ports:
       - 1000:80
     volumes:
       - .:/var/www/developers
-      - ./.docker/nginx/ddc.conf:/etc/nginx/conf.d/ddc.conf
+      - ./.docker/nginx/ddc.conf:/etc/nginx/conf.d/default.conf
     restart: always
     depends_on:
       - php8.1
 
   # PHP8.1 Service
   php8.1:
-    container_name: php8.1
+    container_name: ddc_php
     image: opeoniye/php-fpm:8.1
     working_dir: /var/www/developers
     volumes:
