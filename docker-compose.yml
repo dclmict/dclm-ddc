@@ -3,24 +3,24 @@ services:
 
   # Nginx Service
   nginx1.21:
-    container_name: ddc_nginx
-    image: opeoniye/nginx:1.21
+    container_name: ddc-app
+    image: opeoniye/nginx-php-fpm
+    environment:
+      GIT_REPO: ${GIT_REPO}
+      GIT_EMAIL: ${GIT_EMAIL}
+      GIT_NAME: ${GIT_NAME}
+      GIT_BRANCH: ${GIT_BRANCH}
+      GIT_PERSONAL_TOKEN: ${GIT_PERSONAL_TOKEN}
+      WEBROOT: ${WEBROOT}
     ports:
       - 1000:80
-    volumes:
-      - .:/var/www/developers
-      - ./.docker/nginx/ddc.conf:/etc/nginx/conf.d/default.conf
+    networks:
+      - ddc_app
+    # volumes:
+    #   - .:/var/www/developers
+    #   - ./.docker/nginx/ddc.conf:/etc/nginx/conf.d/default.conf
     restart: always
-    depends_on:
-      - php8.1
 
-  # PHP8.1 Service
-  php8.1:
-    container_name: ddc_php
-    image: opeoniye/php-fpm:8.1
-    working_dir: /var/www/developers
-    volumes:
-      - .:/var/www/developers
-      - ./.docker/php8.1/php.ini:/usr/local/etc/php/php.ini
-      - ./.docker/php8.1/uploads.ini:/usr/local/etc/php/conf.d/uploads.ini
-    restart: always
+networks:
+  ddc:
+    name: ddc_app
