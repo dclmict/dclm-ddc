@@ -1,0 +1,28 @@
+# Services
+services:
+
+  # Nginx Service
+  dclm-devs:
+    container_name: dclm-devs
+    image: richarvey/nginx-php-fpm:latest
+    environment:
+      #SSH_KEY: $SSH_KEY
+      GIT_REPO: $GIT_REPO
+      GIT_EMAIL: $GIT_EMAIL
+      GIT_USERNAME: $GIT_USERNAME
+      GIT_NAME: $GIT_NAME
+      GIT_PERSONAL_TOKEN: $GIT_PERSONAL_TOKEN
+      SKIP_COMPOSER: $SKIP_COMPOSER
+    ports:
+      - 1000:80
+    networks:
+      - dclm-devs
+    volumes:
+    #   - .:/var/www/html
+      - ./.docker/ddc.conf:/etc/nginx/sites-available/default.conf
+    restart: always
+
+networks:
+  dclm-devs:
+    name: dclm-devs
+    #external: true
