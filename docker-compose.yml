@@ -4,21 +4,22 @@ services:
   # Nginx Service
   dclm-devs:
     container_name: dclm-devs
-    image: opeoniye/nginx-php-fpm
+    image: richarvey/nginx-php-fpm:latest
     environment:
-      GIT_REPO: ${GIT_REPO}
-      GIT_EMAIL: ${GIT_EMAIL}
-      GIT_NAME: ${GIT_NAME}
-      GIT_BRANCH: ${GIT_BRANCH}
-      GIT_PERSONAL_TOKEN: ${GIT_PERSONAL_TOKEN}
-      WEBROOT: ${WEBROOT}
+      #SSH_KEY: $SSH_KEY
+      GIT_REPO: $GIT_REPO
+      GIT_EMAIL: $GIT_EMAIL
+      GIT_USERNAME: $GIT_USERNAME
+      GIT_NAME: $GIT_NAME
+      GIT_PERSONAL_TOKEN: $GIT_PERSONAL_TOKEN
+      SKIP_COMPOSER: $SKIP_COMPOSER
     ports:
       - 1000:80
     networks:
       - bams
-    # volumes:
-    #   - .:/var/www/developers
-    #   - ./.docker/nginx/ddc.conf:/etc/nginx/conf.d/default.conf
+    volumes:
+    #   - .:/var/www/html
+      - ./.docker/ddc.conf:/etc/nginx/sites-available/default.conf
     restart: always
 
 networks:
