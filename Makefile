@@ -1,5 +1,5 @@
 up:
-	docker compose -f ./app//frontend/docker-compose.yml --env-file ./app/frontend/.env up --detach
+	docker compose -f ./app/frontend/docker-compose.yml --env-file ./app/frontend/.env up --detach
 build:
 	docker compose -f ./app/frontend/docker-compose.yml --env-file ./app/frontend/.env up --detach --build
 down:

@@ -8,6 +8,9 @@ App url: [DCLM Developers](https://developers.dclm.org)
 
 ## How to Run
 ### Microservices architecture (Docker)
+- make sure you have [docker compose](https://docs.docker.com/compose/install/) installed
+- make sure [PHP 7.4](https://www.php.net/releases/7_4_0.php) is installed on your server
+- make sure you have [composer](https://getcomposer.org/doc/00-intro.md#installation-linux-unix-macos) installed
 - create a directory: `mkdir -p <directory-name>`
 - run `git clone https://github.com/dclmict/dclm-ddc.git .`
 - run `make up` (wait for like 2mins for the container to boot and load properly)
