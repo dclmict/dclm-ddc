@@ -1,7 +1,8 @@
 # waran waran files
 **/.DS_Store
-.env
-**/.setup.txt
+setup
+ops/.env.dev
+ops/.env.prod
 
 # folders
 _

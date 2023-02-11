@@ -1,10 +1,18 @@
-<p align="center"><a href="https://dclm.org" target="_blank"><img src="https://dclmcloud.s3.amazonaws.com/img/logo.png" width="306.5" height="275.5"></a></p>
+<p align="center"><a href="https://dclm.org" target="_blank"><img src="https://dclmcloud.s3.amazonaws.com/img/logo.png" width="206.5" height="190"></a></p>
 
 ## DCLM Developers Community
 
 This is a simple laravel app to present upcoming events, flyers and details to clients. It also collects user submitted event registration data.
 
 App url: [DCLM Developers](https://developers.dclm.org)
+
+## How to Run
+### Microservices architecture (Docker)
+- create a directory: `mkdir -p <directory-name>`
+- run `git clone https://github.com/dclmict/dclm-ddc.git .`
+- run `make up` (wait for like 2mins for the container to boot and load properly)
+- run `make log`
+
 ## Credit
 
 App built and released by [DCLM Developers Community](https://developers.dclm.org).
