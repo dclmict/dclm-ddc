@@ -27,4 +27,3 @@ services:
 networks:
   dclm:
     name: dclm
-    #external: true
