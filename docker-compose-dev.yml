@@ -7,13 +7,10 @@ services:
     image: opeoniye/nginx-php-fpm:2.1.2
     restart: always
     environment:
-      #SSH_KEY: $SSH_KEY
-      # GIT_REPO: $GIT_REPO
-      # GIT_EMAIL: $GIT_EMAIL
-      # GIT_USERNAME: $GIT_USERNAME
-      # GIT_NAME: $GIT_NAME
-      # GIT_PERSONAL_TOKEN: $GIT_PERSONAL_TOKEN
       SKIP_COMPOSER: $SKIP_COMPOSER
+      RUN_SCRIPTS: ${RUN_SCRIPTS}
+      PUID: ${PUID}
+      PGID: ${PGID}
     ports:
       - 1000:80
       - 4000:443
