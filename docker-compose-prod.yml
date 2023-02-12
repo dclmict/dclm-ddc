@@ -16,6 +16,7 @@ services:
       SKIP_COMPOSER: $SKIP_COMPOSER
     ports:
       - 1000:80
+      - 4000:443
     networks:
       - dclm
     volumes:
@@ -23,6 +24,7 @@ services:
       - ../../ops/docker/nginx/ddc.prod.conf:/etc/nginx/sites-available/default.conf
       - ../../ops/docker/nginx/proxy:/etc/nginx/proxy_params
       - ../../ops/docker/nginx/ssl.conf:/etc/nginx/ssl.conf
+      - /etc/letsencrypt:/etc/letsencrypt
 
 networks:
   dclm:
