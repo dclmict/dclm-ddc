@@ -1,18 +1,18 @@
 up:
-	docker compose -f ./app/frontend/docker-compose.yml --env-file ./app/frontend/.env up --detach
+	docker compose -f ./src/frontend/docker-compose.yml --env-file ./src/frontend/.env up --detach
 build:
-	docker compose -f ./app/frontend/docker-compose.yml --env-file ./app/frontend/.env up --detach --build
+	docker compose -f ./src/frontend/docker-compose.yml --env-file ./src/frontend/.env up --detach --build
 down:
-	docker compose -f ./app/frontend/docker-compose.yml --env-file ./app/frontend/.env down
+	docker compose -f ./src/frontend/docker-compose.yml --env-file ./src/frontend/.env down
 start:
-	docker compose -f ./app/frontend/docker-compose.yml --env-file ./app/frontend/.env start
+	docker compose -f ./src/frontend/docker-compose.yml --env-file ./src/frontend/.env start
 stop:
-	docker compose -f ./app/frontend/docker-compose.yml --env-file ./app/frontend/.env stop
+	docker compose -f ./src/frontend/docker-compose.yml --env-file ./src/frontend/.env stop
 restart:
-	docker compose -f ./app/frontend/docker-compose.yml --env-file ./app/frontend/.env.dev restart
+	docker compose -f ./src/frontend/docker-compose.yml --env-file ./src/frontend/.env.dev restart
 destroy:
-	docker compose -f ./app/frontend/docker-compose.yml --env-file ./app/frontend/.env down --volumes
+	docker compose -f ./src/frontend/docker-compose.yml --env-file ./src/frontend/.env down --volumes
 shell:
-	docker compose -f ./app/frontend/docker-compose.yml --env-file ./app/frontend/.env exec -it ddc-app sh
+	docker compose -f ./src/frontend/docker-compose.yml --env-file ./src/frontend/.env exec -it ddc-src sh
 log:
-	docker compose -f ./app/frontend/docker-compose.yml --env-file ./app/frontend/.env logs -f ddc-app
+	docker compose -f ./src/frontend/docker-compose.yml --env-file ./src/frontend/.env logs -f ddc-src
