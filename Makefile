@@ -13,6 +13,6 @@ restart:
 destroy:
 	docker compose -f ./src/frontend/docker-compose.yml --env-file ./src/frontend/.env down --volumes
 shell:
-	docker compose -f ./src/frontend/docker-compose.yml --env-file ./src/frontend/.env exec -it ddc-src sh
+	docker compose -f ./src/frontend/docker-compose.yml --env-file ./src/frontend/.env exec -it ddc-app sh
 log:
-	docker compose -f ./src/frontend/docker-compose.yml --env-file ./src/frontend/.env logs -f ddc-src
+	docker compose -f ./src/frontend/docker-compose.yml --env-file ./src/frontend/.env logs -f ddc-app
