@@ -4,4 +4,4 @@ FROM opeoniye/nginx
 WORKDIR /var/www
 
 # copy code
-COPY ./src /var/www
+COPY --chown=www:www-data ./src /var/www
