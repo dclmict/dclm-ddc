@@ -3,6 +3,7 @@
 setup
 ops/.env.dev
 ops/.env.prod
+src/.env
 
 # folders
 _

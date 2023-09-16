@@ -1,19 +1,17 @@
 <p align="center"><a href="https://dclm.org" target="_blank"><img src="https://dclmcloud.s3.amazonaws.com/img/logo.png" width="206.5" height="190"></a></p>
 
-## DCLM Developers Community
+## DCLM Tech Community
 
-This is a simple laravel app to present upcoming events, flyers and details to clients. It also collects user submitted event registration data.
+DCLM Tech Community website. Global gospel impact through technolology.
 
 App url: [DCLM Developers](https://developers.dclm.org)
 
 ## How to Run
-### Microservices architecture (Docker)
-- make sure you have [docker compose](https://docs.docker.com/compose/install/) installed
-- make sure [PHP 7.4](https://www.php.net/releases/7_4_0.php) is installed on your server
-- make sure you have [composer](https://getcomposer.org/doc/00-intro.md#installation-linux-unix-macos) installed
-- create a directory: `mkdir -p <directory-name>`
-- run `git clone https://github.com/dclmict/dclm-ddc.git .`
-- run `make up` (wait for like 2mins for the container to boot and load properly)
+### (Docker)
+- make sure you have [docker ](https://www.docker.com/products/docker-desktop/) installed
+- create a directory: `mkdir -p dclm-dtc` and `cd dclm-dtc`
+- run `git clone https://github.com/dclmict/dclm-dtc.git .`
+- run `make up`
 - run `make log`
 
 ## Credit
