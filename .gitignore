@@ -4,6 +4,7 @@ setup
 ops/.env.dev
 ops/.env.prod
 src/.env
+src/docker-compose.yml
 
 # folders
 _

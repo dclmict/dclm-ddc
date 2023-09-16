@@ -6,8 +6,10 @@ SHELL := /bin/bash
 SRC := $(shell os=$$(uname -s); \
 	if [ "$$os" = "Linux" ]; then \
 		cp ./ops/.env.prod ./src/.env; \
+		cp ./docker-prod.yml ./src/docker-compose.yml; \
 	elif [ "$$os" = "Darwin" ]; then \
 		cp ./ops/.env.dev ./src/.env; \
+		cp ./docker-dev.yml ./src/docker-compose.yml; \
 	else \
 		exit 1; \
 	fi)
@@ -79,7 +81,6 @@ up:
 	@if [ "$$(uname -s)" = "Linux" ]; then \
 		if [ -f ops/.env.prod ]; then \
 			echo -e "\033[31mStarting container in prod environment...\033[0m"; \
-			cp $(EP) $(ENF) 2>/dev/null || :; \
 			docker pull $(DIN):$(DIV); \
 			docker compose -f $(DCF) --env-file $(EF) up -d; \
 		else \
@@ -89,7 +90,6 @@ up:
 	elif [ "$$(uname -s)" = "Darwin" ]; then \
 		if [ -f ops/.env.prod ]; then \
 			echo -e "\033[31mStarting container in dev environment...\033[0m"; \
-			cp $(ED) $(ENF) 2>/dev/null || :; \
 			docker compose -f $(DCF) --env-file $(EF) up -d; \
 		else \
 			echo -e "\033[31menv file for dev missing.\033[0m"; \
