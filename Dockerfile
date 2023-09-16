@@ -4,7 +4,4 @@ FROM opeoniye/nginx
 WORKDIR /var/www
 
 # copy code
-COPY --chown=nginx:nginx ./src /var/www
-
-# run user as node
-USER nginx
+COPY ./src /var/www
