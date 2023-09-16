@@ -56,4 +56,4 @@ jobs:
           scp -o "StrictHostKeyChecking=no" -r ops/.env.prod ubuntu@dclm.org:/var/docker/dclm-dtc/ops
       
           # Deploy new app
-          ssh -o "StrictHostKeyChecking=no" ubuntu@dclm.org "sed -i '' 's|https://127.0.0.1:4000|https://127.0.0.1:1017|g' /etc/nginx/conf.d/dclm.conf && cd /var/docker/dclm-dtc && make new && make down && make up"        
+          ssh -o "StrictHostKeyChecking=no" ubuntu@dclm.org "cd /etc/nginx/conf.d && sed -i '' 's|https://127.0.0.1:4000|https://127.0.0.1:1017|g' dclm.conf && cd /var/docker/dclm-dtc && make new && make down && make up"
