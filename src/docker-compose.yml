@@ -1,0 +1,25 @@
+# Services
+services:
+
+  dtc-app:
+    container_name: ${CN}
+    image: ${DIN}:${DIV}
+    restart: unless-stopped
+    env_file: .env
+    labels:
+      logging: "promtail"
+      logging_jobname: "containerlogs"
+    ports:
+      - 1017:443
+    networks:
+      - bams
+    volumes:
+      - .:/var/www
+      - ../ops/docker/nginx/dtc.conf:/etc/nginx/conf.d/default.conf
+      - ~/dev/keys/mac/bams.pem:/var/ssl/cert.pem
+      - ~/dev/keys/mac/bams-key.pem:/var/ssl/key.pem
+
+networks:
+  bams:
+    name: bams
+    external: true

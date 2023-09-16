@@ -1,0 +1,21 @@
+# Services
+services:
+
+  dtc-app:
+    container_name: ${CN}
+    image: ${DIN}:${DIV}
+    restart: always
+    env_file: .env
+    ports:
+      - 1017:443
+    networks:
+      - dclm
+    volumes:
+      - .:/var/www
+      - ../ops/docker/nginx/dtc.conf:/etc/nginx/conf.d/default.conf
+      - /etc/letsencrypt/live/dclm.org/fullchain.pem:/var/ssl/cert.pem
+      - /etc/letsencrypt/live/dclm.org/privkey.pem:/var/ssl/key.pem
+
+networks:
+  dclm:
+    name: dclm
