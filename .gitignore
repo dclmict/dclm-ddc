@@ -1,10 +1,10 @@
 # waran waran files
-**/.DS_Store
-setup
+dclm-dtc
 ops/.env.dev
 ops/.env.prod
 src/.env
 src/docker-compose.yml
+**/.DS_Store
 
 # folders
 _

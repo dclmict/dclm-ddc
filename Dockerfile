@@ -4,4 +4,5 @@ FROM opeoniye/nginx
 WORKDIR /var/www
 
 # copy code
+COPY ./ops/docker/nginx/dtc.conf /etc/nginx/conf.d/default.conf
 COPY --chown=www:www-data ./src /var/www
