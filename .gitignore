@@ -1,10 +1,18 @@
-# waran waran files
-dclm-dtc
-ops/.env.dev
-ops/.env.prod
-src/.env
-src/docker-compose.yml
-**/.DS_Store
+# https://git-scm.com/docs/gitignore
+# files
+dclm-*
+dles-*
+dmt-*
+dtc-*
+gck-*
+.cache*
+**/*.env*
+**/.DS_Store*
+ops/k8s/app.yml
+ops/k8s/ing.yml
+ops/k8s/hpa.yml
+ops/k8s/minion.yml
+ops/k8s/secret.yml
 
 # folders
 _
