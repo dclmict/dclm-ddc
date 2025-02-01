@@ -1,0 +1,238 @@
+name: Build & Deploy App
+
+on:
+  push:
+    branches: [ release/* ]
+  pull_request:
+    branches: [ release/* ]
+    types:
+      - closed
+
+jobs:
+  branch-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Check current branch
+        id: check_branch
+        run: |
+          hostname
+          echo "::set-output name=branch::$(git rev-parse --abbrev-ref HEAD)"
+
+  # generate-env:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v3
+
+  #     - name: Create .env file from secrets and variables
+  #       run: |
+  #         # Define the secrets and variables to include in the .env file
+  #         secrets=("DL_APP1" "DL_APP2" "DL_APP3" "DL_TLD" "DL_ORG_ID" "DL_HOST_ENV" "DL_HOST_NAME" "DL_HOST_URL" "DL_APP_TAG" "DL_APP_STACK" "DL_APP_ENV_FILE" "DL_APP_PROTOCOL" "DL_APP_URL1" "DL_APP_URL2" "DL_GITEA_API_URL" "DL_GITEA_ORG" "DL_GITEA_OWNER" "DL_GITEA_ADMIN" "DL_GITEA_REPO" "DL_GITEA_BRANCH" "DL_GITEA_SSH" "DL_GITEA_HTTPS" "DL_GITEA_TOKEN" "DL_GITHUB_API_URL" "DL_GITHUB_OWNER" "DL_GITHUB_REPO" "DL_GITHUB_BRANCH" "DL_GITHUB_SSH" "DL_GITHUB_HTTPS" "DL_GITHUB_TOKEN" "DL_REGISTRY_URL" "DL_REGISTRY_USER" "DL_REGISTRY_TOKEN" "DL_AWS_R53_ZONE_ID" "DL_AWS_KEY" "DL_AWS_SECRET" "DL_AWS_R53_IP" "NAMESPACE" "SERVICE_PORT" "CONTAINER_PORT" "MK_USER" "MK_PASS" "MK_HOST" "MK_DNS_ADDRESS" "MK_DNS_NAME" "MK_DNS_COMMENT" "DL_APP_NAME" "DL_OCI_IMAGE" "DL_GITEA_FULL_REPO" "DL_GITEA_CLONE_URL" "DL_GITEA_SSH_URL" "DL_GITHUB_FULL_REPO" "DL_GITHUB_CLONE_URL" "DL_GITHUB_SSH_URL" "DL_APP_URL" "NODE_ENV" "BASE_URL" "API_KEY" "PORT")
+          
+  #         # Create or clear the .env file
+  #         : > .env
+
+  #         # Add secrets to the .env file
+  #         for secret in "${secrets[@]}"; do
+  #           value="${{ secrets[${secret}] }}"
+  #           echo "$secret=$value" >> .env
+  #         done
+
+  #         # variables=("APP_ENV" "APP_DEBUG")
+  #         # Add variables to the .env file
+  #         # for variable in "${variables[@]}"; do
+  #         #   value="${{ vars[${variable}] }}"
+  #         #   echo "$variable=$value" >> .env
+  #         # done          
+
+        # https://stackoverflow.com/a/57877438
+  #     - name: Upload .env file as an artifact
+  #       uses: actions/upload-artifact@v3
+  #       with:
+  #         name: envfile
+  #         path: ${PWD}/ops/.env
+        
+  #     - run: pwd && ls -l && cat ${PWD}/ops/.env
+
+  # build-image:
+  #   runs-on: ubuntu-latest
+  #   # container: ghcr.io/catthehacker/ubuntu:act-latest
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v4
+  #     - name: Check NODE_ENV 
+  #       id: check_node_env
+  #       run: |
+  #         if [ -n "${{ secrets.NODE_ENV }}" ]; then  
+  #           echo "::set-output name=exists::true"
+  #         else
+  #           echo "::set-output name=exists::false"
+  #         fi          
+  #     - name: If NODE_ENV exists
+  #       if: steps.check_node_env.outputs.exists == 'true'
+  #       env:
+  #         DL_GITEA_ADMIN: ${{ secrets.DL_GITEA_ADMIN}}
+  #         DL_GITEA_TOKEN: ${{ secrets.DL_GITEA_TOKEN }}
+  #         DL_OCI_IMAGE: ${{ secrets.DL_OCI_IMAGE}}
+  #         NODE_ENV: ${{ secrets.NODE_ENV}}
+  #       run: |
+  #         # Build and push Docker image
+  #         ln -s ops/docker/Dockerfile Dockerfile
+  #         ln -s ops/docker/.dockerignore .dockerignore
+  #         docker build --build-arg NODE_ENV=$NODE_ENV -t $DL_OCI_IMAGE .
+  #         rm Dockerfile && .dockerignore
+  #         echo $DL_GITEA_TOKEN | docker login -u $DL_GITEA_ADMIN --password-stdin
+  #         docker push $DL_OCI_IMAGE          
+  #     - name: If NODE_ENV does NOT exist
+  #       if: steps.check_node_env.outputs.exists == 'false'
+  #       env:
+  #         DL_GITEA_ADMIN: ${{ secrets.DL_GITEA_ADMIN}}
+  #         DL_GITEA_TOKEN: ${{ secrets.DL_GITEA_TOKEN }}
+  #         DL_OCI_IMAGE: ${{ secrets.DL_OCI_IMAGE}}
+  #       run: |
+  #         # Build and push Docker image
+  #         ln -s ops/docker/Dockerfile Dockerfile
+  #         ln -s ops/docker/.dockerignore .dockerignore
+  #         docker build -t $DL_OCI_IMAGE .
+  #         rm Dockerfile && .dockerignore
+  #         echo $DL_GITEA_TOKEN | docker login -u $DL_GITEA_ADMIN gitea.dclm.hq --password-stdin
+  #         docker push $DL_OCI_IMAGE
+
+  build-push:
+    runs-on: ubuntu-latest
+    container: 
+      image: gitea.dclm.hq/dclm/act-ubuntu # catthehacker/ubuntu:act-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Create Kubeconfig
+      run: |
+        mkdir $HOME/.kube
+        echo "${{ secrets.KUBECONFIG_BUILDX }}" > $HOME/.kube/config
+        cat $HOME/.kube/config
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      env:
+        NODE_ENV: ${{ secrets.NODE_ENV }}
+      with:
+        driver: kubernetes
+        driver-opts: |
+          namespace=devops
+          qemu.install=true          
+
+    - name: Login to Docker Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ secrets.DL_REGISTRY_URL }}
+        username: ${{ secrets.DL_GITEA_ADMIN }}
+        password: ${{ secrets.DL_REGISTRY_TOKEN }}
+
+    - name: Copy Dockerfile to context
+      run: |
+        ln -s ops/docker/Dockerfile Dockerfile
+        ln -s ops/docker/.dockerignore .dockerignore
+        ls -l
+
+    - name: Build and push
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: |
+          ${{ secrets.DL_OCI_IMAGE }}
+      env:
+        NODE_ENV: ${{ secrets.NODE_ENV }}
+        DL_OCI_IMAGE: ${{ secrets.DL_OCI_IMAGE }}
+
+
+  create-dns-record:
+    runs-on: ubuntu-latest
+    needs: branch-check
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up AWS CLI
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.DL_AWS_KEY }}
+          aws-secret-access-key: ${{ secrets.DL_AWS_SECRET }}
+          aws-region: us-east-1
+
+      - name: Check current branch
+        id: check_branch
+        run: echo "::set-output name=branch::$(git rev-parse --abbrev-ref HEAD)"
+
+      - name: Create Mikrotik DNS record
+        if: ${{ steps.check_branch.outputs.branch == 'release/k8s-dev' }}
+        env:
+          MK_DNS_NAME: ${{ secrets.MK_DNS_NAME }}
+          MK_DNS_ADDRESS: ${{ secrets.MK_DNS_ADDRESS }}
+          MK_USER: ${{ secrets.MK_USER }}
+          MK_HOST: ${{ secrets.MK_HOST }}
+          MK_DNS_COMMENT: ${{ secrets.MK_DNS_COMMENT }}
+          DLES_SSH_KEY: ${{ secrets.DLES_SSH_KEY }}
+        run: |
+          chmod +x ./ops/sh/app.sh
+          ./ops/sh/app.sh 25
+
+      - name: Create Route53 DNS record
+        if: ${{ steps.check_branch.outputs.branch == 'release/k8s-prod' }}
+        env:
+          DL_AWS_R53_ZONE_ID: ${{ secrets.DL_AWS_R53_ZONE_ID }}
+          DL_AWS_R53_IP: ${{ secrets.DL_AWS_R53_IP }}
+          DL_URL1: ${{ secrets.DL_URL1 }}
+          DL_URL2: ${{ secrets.DL_URL2 }}
+          DL_URL3: ${{ secrets.DL_URL3 }}
+        run: |
+          chmod +x ./ops/sh/app.sh
+          ./ops/sh/app.sh 7
+  
+  deploy-app:
+    runs-on: ubuntu-latest
+    needs: branch-check, build-image
+    container: 
+      image: gitea.dclm.hq/dclm/act-ubuntu
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create Kubeconfig
+        env:
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+        run: |
+          mkdir $HOME/.kube
+          echo "${{ secrets.KUBE_CONFIG }}" > $HOME/.kube/config
+          cat $HOME/.kube/config
+
+      # - uses: actions/download-artifact@master
+      #   with:
+      #     name: envfile
+      #     path: ${PWD}/ops/.env
+
+      - name: Check current branch
+        id: check_branch
+        run: echo "::set-output name=branch::$(git rev-parse --abbrev-ref HEAD)"
+
+      - name: Deploy app to dev
+        if: ${{ steps.check_branch.outputs.branch == 'release/k8s-dev' }}
+        run: |
+          kubectl config use-context dles-k8s
+          kubectl get pods
+          chmod +x ./ops/sh/app.sh
+          ./ops/sh/app.sh 28
+
+      - name: Deploy app to prod
+        if: ${{ steps.check_branch.outputs.branch == 'release/k8s-prod' }}
+        run: |
+          kubectl config use-context dclm-eks
+          kubectl get pods
+          chmod +x ./ops/sh/app.sh
+          ./ops/sh/app.sh 28
