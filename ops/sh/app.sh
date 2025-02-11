@@ -2959,7 +2959,7 @@ function k8s_full_deploy {
   docker_push yes
   k8s_app_deployment
   k8s_app_env $dotenv ./ops/k8s/template.yml ./ops/k8s/app.yml
-  k8s_app_ingress
+  k8s_ingress_app $dotenv ./ops/k8s/ing.yml
   k8s_autoscaling
   k8s_app_secret $dotenv ./ops/k8s/secret.yml
   k8s_seal_app_secret ./ops/k8s/secret.yml ./ops/k8s/ssecret.yml
@@ -2974,7 +2974,7 @@ function k8s_mini_deploy {
   set_kube_context $K8S_CONTEXT $K8S_NAMESPACE
   k8s_app_deployment
   k8s_app_env $dotenv ./ops/k8s/template.yml ./ops/k8s/app.yml
-  k8s_app_ingress
+  k8s_ingress_app $dotenv ./ops/k8s/ing.yml
   k8s_autoscaling
   k8s_app_secret $dotenv ./ops/k8s/secret.yml
   k8s_seal_app_secret ./ops/k8s/secret.yml ./ops/k8s/ssecret.yml
