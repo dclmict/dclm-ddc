@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # add envfile to shell
-if [ "$(hostname)" == "bams" ] || [ "$(hostname)" == "dles-vm1" ]; then
+if [ "$(hostname)" == "bams" ] || [ "$(hostname)" == "dles-vm1" ] || [ "$(hostname)" == "DCLM-DLES-1" ]; then
   dotenv='./src/.env'
   
   if [ ! -f "$dotenv" ]; then
