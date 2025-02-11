@@ -2559,6 +2559,171 @@ function k8s_app_ingress {
   fi
 }
 
+
+
+function k8s_ingress_app() {
+  ENVFILE=$1
+  OUTPUT_FILE=$2
+
+  # Load the envfile
+  if [[ -f "$ENVFILE" ]]; then
+  source "$ENVFILE"
+  else
+  echo "Env file not found!"
+  exit 1
+  fi
+
+  # Initialize the output variable for the ingress manifest
+  output="apiVersion: networking.k8s.io/v1\nkind: Ingress\nmetadata:\n"
+
+  # Dynamic metadata: name and namespace
+  if [ -n "$INGRESS_NAME" ]; then
+    output+="  name: $INGRESS_NAME\n"
+  fi
+
+  if [ -n "$NAMESPACE" ]; then
+    output+="  namespace: $NAMESPACE\n"
+  fi
+
+  # Build annotations block if any annotation value is provided
+  annotations=""
+
+  # Additional annotations can be appended if provided
+  if [ -n "$SSL_REDIRECT" ]; then
+    annotations+="    nginx.org/ssl-redirect: \"$SSL_REDIRECT\"\n"
+  fi
+
+  if [ -n "$REWRITE_TARGET" ]; then
+    annotations+="    nginx.org/rewrite-target: \"$REWRITE_TARGET\"\n"
+  fi
+
+  # New: Add client-max-body-size annotation if provided
+  if [ -n "$CLIENT_MAX_BODY_SIZE" ]; then
+    annotations+="    nginx.org/client-max-body-size: \"$CLIENT_MAX_BODY_SIZE\"\n"
+  fi
+
+  # Add allowed-ips annotation if provided
+  if [ -n "$ALLOWED_IPS" ]; then
+    annotations+="    custom.nginx.org/allowed-ips: \"$ALLOWED_IPS\"\n"
+  fi
+
+  # Add external-dns annotation if provided
+  if [ -n "$EXTERNAL_DNS_TARGET" ]; then
+    annotations+="    external-dns.alpha.kubernetes.io/target: \"$EXTERNAL_DNS_TARGET\"\n"
+  fi
+
+  # Add a location snippet for redirection if both REDIRECT_PATH and REDIRECT_URL are provided
+  if [ -n "$REDIRECT_PATH" ] && [ -n "$REDIRECT_URL" ]; then
+    annotations+="    nginx.org/location-snippets: |\n"
+    annotations+="      if (\$request_uri ~* ^$REDIRECT_PATH) {\n"
+    annotations+="        return 302 $REDIRECT_URL;\n"
+    annotations+="      }\n"
+  fi
+
+  # Append annotations to metadata only if annotations were generated
+  if [ -n "$annotations" ]; then
+    output+="  annotations:\n"
+    output+="$annotations"
+  fi
+
+  # Begin the spec section
+  output+="spec:\n"
+
+  # Add ingressClassName if provided
+  if [ -n "$INGRESS_CLASS" ]; then
+    output+="  ingressClassName: $INGRESS_CLASS\n"
+  fi
+
+  # TLS configuration: expects TLS_HOSTS and TLS_SECRET_NAMES as comma-separated lists
+  if [ -n "$TLS_HOSTS" ] && [ -n "$TLS_SECRET_NAMES" ]; then
+    IFS=',' read -r -a tls_hosts_array <<< "$TLS_HOSTS"
+    IFS=',' read -r -a tls_secrets_array <<< "$TLS_SECRET_NAMES"
+    output+="  tls:\n"
+    for i in "${!tls_hosts_array[@]}"; do
+      host=$(echo "${tls_hosts_array[$i]}" | xargs)
+      secret=$(echo "${tls_secrets_array[$i]}" | xargs)
+      output+="    - hosts:\n"
+      output+="        - $host\n"
+      output+="      secretName: $secret\n"
+    done
+  fi
+
+  # Rules configuration: expects RULES in the format: host,path,service,port;host,path,service,port;...
+  if [ -n "$RULES" ]; then
+    output+="  rules:\n"
+    # Split RULES by semicolon
+    IFS=';' read -r -a rules_array <<< "$RULES"
+    declare -A host_rules
+    # Group rules by host
+    for rule in "${rules_array[@]}"; do
+      # Remove any extra spaces
+      rule=$(echo "$rule" | xargs)
+      IFS=',' read -r host path service port <<< "$rule"
+      if [ -n "$host" ] && [ -n "$path" ] && [ -n "$service" ] && [ -n "$port" ]; then
+        host_rules["$host"]+="$path,$service,$port;"
+      fi
+    done
+
+    # Generate rules for each host in the associative array
+    for host in "${!host_rules[@]}"; do
+      output+="    - host: $host\n"
+      output+="      http:\n"
+      output+="        paths:\n"
+      IFS=';' read -r -a paths_array <<< "${host_rules[$host]}"
+      for entry in "${paths_array[@]}"; do
+        if [ -n "$entry" ]; then
+          IFS=',' read -r path service port <<< "$entry"
+          output+="          - path: $path\n"
+          output+="            pathType: Prefix\n"
+          output+="            backend:\n"
+          output+="              service:\n"
+          output+="                name: $service\n"
+          output+="                port:\n"
+          output+="                  number: $port\n"
+        fi
+      done
+    done
+  fi
+
+  # Write the generated manifest to a file
+  echo -e "$output" > $OUTPUT_FILE
+  echo "Generated Ingress manifest saved to $OUTPUT_FILE"
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 function k8s_hpa_dev {
   # script to generate k8s manifest file from a template file
   # Usage: ./app.sh .env template.yml
@@ -2775,11 +2940,12 @@ function deploy_ci_cd {
 #---------------------------------------#
 function k8s_create_manifests {
   make
-  dev
+  # dev
   rm -rf ./ops/k8s/*
   k8s_app_deployment
   k8s_app_env $dotenv ./ops/k8s/template.yml ./ops/k8s/app.yml
-  k8s_app_ingress
+  # k8s_app_ingress
+  k8s_ingress_app $dotenv ./ops/k8s/ing.yml
   k8s_autoscaling
   k8s_app_secret $dotenv ./ops/k8s/secret.yml
 }
