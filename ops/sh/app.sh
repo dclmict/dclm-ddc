@@ -1913,651 +1913,213 @@ EOF
   rm $TEMPLATE
 }
 
-function k8s_api_ingress_master_dev {
-  # script to generate k8s manifest file from a template file
-  # Usage: ./app.sh .env template.yml
 
+function k8s_ingress_app() {
   ENVFILE=$1
   OUTPUT_FILE=$2
 
   # Load the envfile
   if [[ -f "$ENVFILE" ]]; then
-    source "$ENVFILE"
+  source "$ENVFILE"
   else
-    echo "Env file not found!"
-    exit 1
+  echo "Env file not found!"
+  exit 1
   fi
 
-  # Define the template
-  read -r -d '' TEMPLATE << 'EOF'
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: ${DL_APP_NAME}-master
-  namespace: ${K8S_NAMESPACE}
-  annotations:
-    nginx.org/mergeable-ingress-type: "master"
-    nginx.org/client-max-body-size: "5000m"
-    external-dns.alpha.kubernetes.io/target: "${DL_AWS_R53_IP}"
-spec:
-  ingressClassName: nginx
-  # tls:
-  # - hosts:
-  #   - ${DL_APP_URL1}
-  #   secretName: ${K8S_TLS}
-  rules:
-  - host: ${DL_APP_URL1}
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: ${DL_APP_NAME}-master-2
-  namespace: ${K8S_NAMESPACE}
-  annotations:
-    nginx.org/mergeable-ingress-type: master
-    nginx.org/client-max-body-size: 5000m
-spec:
-  ingressClassName: nginx
-  tls:
-  - hosts:
-    - ${DL_APP_URL2}
-    secretName: ${K8S_TLS_1}
-  rules:
-  - host: ${DL_APP_URL2}
-EOF
+  # Function to generate an Ingress manifest.
+  # Accepts one argument: merge_type (empty for default, or "master"/"minion")
+  generate_ingress() {
+    local merge_type="$1"
+    local ingress_name="$INGRESS_NAME"
+    if [ -n "$merge_type" ]; then
+      ingress_name="${INGRESS_NAME}-${merge_type}"
+    fi
 
-  # Replace placeholders in the template
-  eval "echo \"${TEMPLATE}\"" > "$OUTPUT_FILE"
-  echo "Generated Kubernetes manifest saved to $OUTPUT_FILE"
+    local result="apiVersion: networking.k8s.io/v1\nkind: Ingress\nmetadata:\n"
+
+    # Metadata: name and namespace
+    result+="  name: $ingress_name\n"
+    result+="  namespace: $NAMESPACE\n"
+
+    # Build annotations block
+    local annotations=""
+    if [ -n "$merge_type" ]; then
+      annotations+="    nginx.org/mergeable-ingress-type: \"$merge_type\"\n"
+    fi
+
+    # Common annotation for both master and others
+    if [ -n "$CLIENT_MAX_BODY_SIZE" ]; then
+      annotations+="    nginx.org/client-max-body-size: \"$CLIENT_MAX_BODY_SIZE\"\n"
+    fi
+
+    # For default and minion (full ingress), include additional annotations
+    if [ -z "$merge_type" ] || [ "$merge_type" = "minion" ]; then
+      if [ -n "$SSL_REDIRECT" ]; then
+        annotations+="    nginx.org/ssl-redirect: \"$SSL_REDIRECT\"\n"
+      fi
+      if [ -n "$REWRITE_TARGET" ]; then
+        annotations+="    nginx.org/rewrite-target: \"$REWRITE_TARGET\"\n"
+      fi
+      if [ -n "$ALLOWED_IPS" ]; then
+        annotations+="    custom.nginx.org/allowed-ips: \"$ALLOWED_IPS\"\n"
+      fi
+      if [ -n "$EXTERNAL_DNS_TARGET" ]; then
+        annotations+="    external-dns.alpha.kubernetes.io/target: \"$EXTERNAL_DNS_TARGET\"\n"
+      fi
+      if [ -n "$REDIRECT_PATH" ] && [ -n "$REDIRECT_URL" ]; then
+        annotations+="    nginx.org/location-snippets: |\n"
+        IFS=',' read -r -a redirect_paths_array <<< "$REDIRECT_PATH"
+        IFS=',' read -r -a redirect_urls_array <<< "$REDIRECT_URL"
+        local len=${#redirect_paths_array[@]}
+        for (( i=0; i<len; i++ )); do
+          local path url
+          path=$(echo "${redirect_paths_array[$i]}" | xargs)
+          if [ -n "${redirect_urls_array[$i]}" ]; then
+            url=$(echo "${redirect_urls_array[$i]}" | xargs)
+          else
+            url=$(echo "${redirect_urls_array[0]}" | xargs)
+          fi
+          annotations+="      if (\$request_uri ~* ^$path) {\n"
+          annotations+="        return 302 $url;\n"
+          annotations+="      }\n"
+        done
+      fi
+    fi
+
+    if [ -n "$annotations" ]; then
+      result+="  annotations:\n"
+      result+="$annotations"
+    fi
+
+    # Begin spec section
+    result+="spec:\n"
+    if [ -n "$INGRESS_CLASS" ]; then
+      result+="  ingressClassName: $INGRESS_CLASS\n"
+    fi
+
+    # TLS block: only add if not a minion ingress
+    if [ "$merge_type" != "minion" ] && [ -n "$TLS_HOSTS" ] && [ -n "$TLS_SECRET_NAMES" ]; then
+      IFS=',' read -r -a tls_hosts_array <<< "$TLS_HOSTS"
+      IFS=',' read -r -a tls_secrets_array <<< "$TLS_SECRET_NAMES"
+      result+="  tls:\n"
+      for i in "${!tls_hosts_array[@]}"; do
+        local host secret
+        host=$(echo "${tls_hosts_array[$i]}" | xargs)
+        secret=$(echo "${tls_secrets_array[$i]}" | xargs)
+        result+="    - hosts:\n"
+        result+="        - $host\n"
+        result+="      secretName: $secret\n"
+      done
+    fi
+
+    # Rules block generation
+    if [ "$merge_type" = "master" ]; then
+      # For master, output a minimal rules block with only the host.
+      local master_host=""
+      if [ -n "$TLS_HOSTS" ]; then
+        IFS=',' read -r -a tls_hosts_array <<< "$TLS_HOSTS"
+        master_host=$(echo "${tls_hosts_array[0]}" | xargs)
+      elif [ -n "$RULES" ]; then
+        IFS=';' read -r -a rules_array <<< "$RULES"
+        IFS=',' read -r master_host _ <<< "${rules_array[0]}"
+        master_host=$(echo "$master_host" | xargs)
+      fi
+      if [ -n "$master_host" ]; then
+        result+="  rules:\n"
+        result+="  - host: $master_host\n"
+      fi
+    else
+      # For minion and default, generate full rules with http paths.
+      if [ -n "$RULES" ]; then
+        result+="  rules:\n"
+        IFS=';' read -r -a rules_array <<< "$RULES"
+        declare -A host_rules
+        for rule in "${rules_array[@]}"; do
+          rule=$(echo "$rule" | xargs)
+          IFS=',' read -r host path service port <<< "$rule"
+          if [ -n "$host" ] && [ -n "$path" ] && [ -n "$service" ] && [ -n "$port" ]; then
+            host_rules["$host"]+="$path,$service,$port;"
+          fi
+        done
+        for host in "${!host_rules[@]}"; do
+          result+="  - host: $host\n"
+          result+="    http:\n"
+          result+="      paths:\n"
+          IFS=';' read -r -a paths_array <<< "${host_rules[$host]}"
+          for entry in "${paths_array[@]}"; do
+            if [ -n "$entry" ]; then
+              IFS=',' read -r path service port <<< "$entry"
+              result+="      - path: $path\n"
+              result+="        pathType: Prefix\n"
+              result+="        backend:\n"
+              result+="          service:\n"
+              result+="            name: $service\n"
+              result+="            port:\n"
+              result+="              number: $port\n"
+            fi
+          done
+        done
+      fi
+    fi
+
+    echo -e "$result"
+  }
+
+  # Main script logic
+  final_output=""
+
+  if [ -n "$INGRESS_TYPE" ]; then
+    IFS=',' read -r -a types_array <<< "$INGRESS_TYPE"
+    for type in "${types_array[@]}"; do
+      type=$(echo "$type" | xargs)
+      ingress_manifest=$(generate_ingress "$type")
+      if [ -n "$final_output" ]; then
+        final_output+="\n---\n"
+      fi
+      final_output+="$ingress_manifest"
+    done
+  else
+    final_output=$(generate_ingress "")
+  fi
+
+  # Write the generated manifest to a file
+  echo -e "$final_output" > $OUTPUT_FILE
+  echo "Generated Ingress manifest saved to $OUTPUT_FILE"
+
 }
 
-function k8s_api_ingress_master_prev {
-  # script to generate k8s manifest file from a template file
-  # Usage: ./app.sh .env template.yml
 
-  ENVFILE=$1
-  OUTPUT_FILE=$2
 
-  # Load the envfile
-  if [[ -f "$ENVFILE" ]]; then
-    source "$ENVFILE"
-  else
-    echo "Env file not found!"
-    exit 1
-  fi
 
-  # Define the template
-  read -r -d '' TEMPLATE << 'EOF'
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: ${DL_APP_NAME}-master
-  namespace: ${K8S_NAMESPACE}
-  annotations:
-    nginx.org/mergeable-ingress-type: "master"
-    nginx.org/client-max-body-size: "5000m"
-    external-dns.alpha.kubernetes.io/target: "${DL_AWS_R53_IP}"
-spec:
-  ingressClassName: nginx
-  # tls:
-  # - hosts:
-  #   - ${DL_APP_URL1}
-  #   secretName: ${K8S_TLS}
-  rules:
-  - host: ${DL_APP_URL1}
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: ${DL_APP_NAME}-master-2
-  namespace: ${K8S_NAMESPACE}
-  annotations:
-    nginx.org/mergeable-ingress-type: master
-    nginx.org/client-max-body-size: 5000m
-spec:
-  ingressClassName: nginx
-  tls:
-  - hosts:
-    - ${DL_APP_URL2}
-    secretName: ${K8S_TLS_1}
-  rules:
-  - host: ${DL_APP_URL2}
-EOF
 
-  # Replace placeholders in the template
-  eval "echo \"${TEMPLATE}\"" > "$OUTPUT_FILE"
-  echo "Generated Kubernetes manifest saved to $OUTPUT_FILE"
-}
 
-function k8s_api_ingress_master_prod {
-  # script to generate k8s manifest file from a template file
-  # Usage: ./app.sh .env template.yml
 
-  ENVFILE=$1
-  OUTPUT_FILE=$2
 
-  # Load the envfile
-  if [[ -f "$ENVFILE" ]]; then
-    source "$ENVFILE"
-  else
-    echo "Env file not found!"
-    exit 1
-  fi
 
-  # Define the template
-  read -r -d '' TEMPLATE << 'EOF'
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: ${DL_APP_NAME}-master
-  namespace: ${K8S_NAMESPACE}
-  annotations:
-    nginx.org/mergeable-ingress-type: "master"
-    nginx.org/client-max-body-size: "5000m"
-spec:
-  ingressClassName: nginx
-  tls:
-  - hosts:
-    - ${DL_APP_URL1}
-    secretName: ${K8S_TLS}
-  rules:
-  - host: ${DL_APP_URL1}
-EOF
 
-  # Replace placeholders in the template
-  eval "echo \"${TEMPLATE}\"" > "$OUTPUT_FILE"
-  echo "Generated Kubernetes manifest saved to $OUTPUT_FILE"
-}
 
-function k8s_api_ingress_minion_dev {
-  # script to generate k8s manifest file from a template file
-  # Usage: ./app.sh .env template.yml
 
-  ENVFILE=$1
-  OUTPUT_FILE=$2
 
-  # Load the envfile
-  if [[ -f "$ENVFILE" ]]; then
-    source "$ENVFILE"
-  else
-    echo "Env file not found!"
-    exit 1
-  fi
 
-  # Define the template
-  read -r -d '' TEMPLATE << 'EOF'
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: ${DL_APP_NAME}
-  namespace: ${K8S_NAMESPACE}
-  annotations:
-    nginx.org/mergeable-ingress-type: "minion"
-spec:
-  ingressClassName: nginx
-  rules:
-  - host: ${DL_APP_URL1}
-    http:
-      paths:
-      - path: ${DL_APP_PATH}
-        pathType: Prefix
-        backend:
-          service:
-            name: ${DL_APP_NAME}
-            port:
-              number: ${K8S_SERVICE_PORT}
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: ${DL_APP_NAME}-2
-  namespace: ${K8S_NAMESPACE}
-  annotations:
-    nginx.org/mergeable-ingress-type: minion
-spec:
-  ingressClassName: nginx
-  rules:
-  - host: ${DL_APP_URL2}
-    http:
-      paths:
-      - path: ${DL_APP_PATH}
-        pathType: Prefix
-        backend:
-          service:
-            name: ${DL_APP_NAME}
-            port:
-              number: ${K8S_SERVICE_PORT}
-EOF
 
-  # Replace placeholders in the template
-  eval "echo \"${TEMPLATE}\"" > "$OUTPUT_FILE"
-  echo "Generated Kubernetes manifest saved to $OUTPUT_FILE"
-}
 
-function k8s_api_ingress_minion_prev {
-  # script to generate k8s manifest file from a template file
-  # Usage: ./app.sh .env template.yml
 
-  ENVFILE=$1
-  OUTPUT_FILE=$2
 
-  # Load the envfile
-  if [[ -f "$ENVFILE" ]]; then
-    source "$ENVFILE"
-  else
-    echo "Env file not found!"
-    exit 1
-  fi
 
-  # Define the template
-  read -r -d '' TEMPLATE << 'EOF'
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: ${DL_APP_NAME}
-  namespace: ${K8S_NAMESPACE}
-  annotations:
-    nginx.org/mergeable-ingress-type: "minion"
-spec:
-  ingressClassName: nginx
-  rules:
-  - host: ${DL_APP_URL1}
-    http:
-      paths:
-      - path: ${DL_APP_PATH}
-        pathType: Prefix
-        backend:
-          service:
-            name: ${DL_APP_NAME}
-            port:
-              number: ${K8S_SERVICE_PORT}
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: ${DL_APP_NAME}-2
-  namespace: ${K8S_NAMESPACE}
-  annotations:
-    nginx.org/mergeable-ingress-type: minion
-spec:
-  ingressClassName: nginx
-  rules:
-  - host: ${DL_APP_URL2}
-    http:
-      paths:
-      - path: ${DL_APP_PATH}
-        pathType: Prefix
-        backend:
-          service:
-            name: ${DL_APP_NAME}
-            port:
-              number: ${K8S_SERVICE_PORT}
-EOF
 
-  # Replace placeholders in the template
-  eval "echo \"${TEMPLATE}\"" > "$OUTPUT_FILE"
-  echo "Generated Kubernetes manifest saved to $OUTPUT_FILE"
-}
 
-function k8s_api_ingress_minion_prod {
-  # script to generate k8s manifest file from a template file
-  # Usage: ./app.sh .env template.yml
 
-  ENVFILE=$1
-  OUTPUT_FILE=$2
 
-  # Load the envfile
-  if [[ -f "$ENVFILE" ]]; then
-    source "$ENVFILE"
-  else
-    echo "Env file not found!"
-    exit 1
-  fi
 
-  # Define the template
-  read -r -d '' TEMPLATE << 'EOF'
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: ${DL_APP_NAME}
-  namespace: ${K8S_NAMESPACE}
-  annotations:
-    nginx.org/mergeable-ingress-type: "minion"
-spec:
-  ingressClassName: nginx
-  rules:
-  - host: ${DL_APP_URL1}
-    http:
-      paths:
-      - path: ${DL_APP_PATH}
-        pathType: Prefix
-        backend:
-          service:
-            name: ${DL_APP_NAME}
-            port:
-              number: ${K8S_SERVICE_PORT}
-EOF
 
-  # Replace placeholders in the template
-  eval "echo \"${TEMPLATE}\"" > "$OUTPUT_FILE"
-  echo "Generated Kubernetes manifest saved to $OUTPUT_FILE"
-}
 
-function k8s_app_ingress_dev {
-  ENVFILE=$1
-  OUTPUT_FILE=$2
 
-  if [[ -f "$ENVFILE" ]]; then
-    source "$ENVFILE"
-  else
-    echo "Env file not found!"
-    exit 1
-  fi
 
-  # First Ingress template (always included)
-  read -r -d '' INGRESS_ONE << 'EOF'
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: ${DL_APP_NAME}
-  namespace: ${K8S_NAMESPACE}
-  annotations:
-    nginx.org/client-max-body-size: "5000m"
-    custom.nginx.org/allowed-ips: "192.168.20.1/24, 169.239.48.118"
-    external-dns.alpha.kubernetes.io/target: "${DL_AWS_R53_IP}"
-spec:
-  ingressClassName: nginx
-  rules:
-  - host: ${DL_APP_URL1}
-    http:
-      paths:
-      - path: ${DL_APP_PATH}
-        pathType: Prefix
-        backend:
-          service:
-            name: ${DL_APP_NAME}
-            port:
-              number: ${K8S_SERVICE_PORT}
-EOF
-  # Second Ingress template (only included if DL_APP_URL2 is set)
-  read -r -d '' INGRESS_TWO << 'EOF'
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: ${DL_APP_NAME}-2
-  namespace: ${K8S_NAMESPACE}
-  annotations:
-    nginx.org/client-max-body-size: "5000m"
-spec:
-  ingressClassName: nginx
-  tls:
-  - hosts:
-    - ${DL_APP_URL2}
-    secretName: ${K8S_TLS_1}
-  rules:
-  - host: ${DL_APP_URL2}
-    http:
-      paths:
-      - path: ${DL_APP_PATH}
-        pathType: Prefix
-        backend:
-          service:
-            name: ${DL_APP_NAME}
-            port:
-              number: ${K8S_SERVICE_PORT}
-EOF
-  # Decide which templates to include
-  if [[ -n "$DL_APP_URL2" ]]; then
-    FULL_TEMPLATE="${INGRESS_ONE}${INGRESS_TWO}"
-  else
-    FULL_TEMPLATE="${INGRESS_ONE}"
-  fi
 
-  # Perform placeholder substitution and output
-  eval "echo \"${FULL_TEMPLATE}\"" > "$OUTPUT_FILE"
-  echo "Generated Kubernetes manifest saved to $OUTPUT_FILE"
-}
 
-# ...existing code...
-function k8s_app_ingress_prev {
-  ENVFILE=$1
-  OUTPUT_FILE=$2
 
-  if [[ -f "$ENVFILE" ]]; then
-    source "$ENVFILE"
-  else
-    echo "Env file not found!"
-    exit 1
-  fi
 
-  # First Ingress (always included)
-  read -r -d '' INGRESS_ONE << 'EOF'
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: ${DL_APP_NAME}
-  namespace: ${K8S_NAMESPACE}
-  annotations:
-    nginx.org/client-max-body-size: "5000m"
-    custom.nginx.org/allowed-ips: "192.168.20.1/24, 169.239.48.118"
-    external-dns.alpha.kubernetes.io/target: "${DL_AWS_R53_IP}"
-spec:
-  ingressClassName: nginx
-  rules:
-  - host: ${DL_APP_URL1}
-    http:
-      paths:
-      - path: ${DL_APP_PATH}
-        pathType: Prefix
-        backend:
-          service:
-            name: ${DL_APP_NAME}
-            port:
-              number: ${K8S_SERVICE_PORT}
-EOF
-  # Second Ingress (only if DL_APP_URL2 is set)
-  read -r -d '' INGRESS_TWO << 'EOF'
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: ${DL_APP_NAME}-2
-  namespace: ${K8S_NAMESPACE}
-  annotations:
-    nginx.org/client-max-body-size: "5000m"
-spec:
-  ingressClassName: nginx
-  tls:
-  - hosts:
-    - ${DL_APP_URL2}
-    secretName: ${K8S_TLS_1}
-  rules:
-  - host: ${DL_APP_URL2}
-    http:
-      paths:
-      - path: ${DL_APP_PATH}
-        pathType: Prefix
-        backend:
-          service:
-            name: ${DL_APP_NAME}
-            port:
-              number: ${K8S_SERVICE_PORT}
-EOF
 
-  if [[ -n "$DL_APP_URL2" ]]; then
-    FULL_TEMPLATE="${INGRESS_ONE}${INGRESS_TWO}"
-  else
-    FULL_TEMPLATE="${INGRESS_ONE}"
-  fi
-
-  eval "echo \"${FULL_TEMPLATE}\"" > "$OUTPUT_FILE"
-  echo "Generated Kubernetes manifest saved to $OUTPUT_FILE"
-}
-
-function k8s_app_ingress_prod {
-  # script to generate k8s manifest file from a template file
-  # Usage: ./app.sh .env template.yml
-
-  ENVFILE=$1
-  OUTPUT_FILE=$2
-
-  # Load the envfile
-  if [[ -f "$ENVFILE" ]]; then
-    source "$ENVFILE"
-  else
-    echo "Env file not found!"
-    exit 1
-  fi
-
-  # Define the template
-  read -r -d '' TEMPLATE << 'EOF'
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: ${DL_APP_NAME}
-  namespace: ${K8S_NAMESPACE}
-  annotations:
-    nginx.org/client-max-body-size: "5000m"
-spec:
-  ingressClassName: nginx
-  tls:
-  - hosts:
-    - ${DL_APP_URL1}
-    secretName: ${K8S_TLS}
-  rules:
-  - host: ${DL_APP_URL1}
-    http:
-      paths:
-      - path: ${DL_APP_PATH}
-        pathType: Prefix
-        backend:
-          service:
-            name: ${DL_APP_NAME}
-            port:
-              number: ${K8S_SERVICE_PORT}
-EOF
-
-  # Replace placeholders in the template
-  eval "echo \"${TEMPLATE}\"" > "$OUTPUT_FILE"
-  echo "Generated Kubernetes manifest saved to $OUTPUT_FILE"
-}
-
-function k8s_app_ingress {
-  
-  # check branch
-  branch=$(git rev-parse --abbrev-ref HEAD)
-
-  if [[ "$branch" = "release/k8s-dev" ]]; then
-
-    if [ "$DL_APP_NAME" = "dles-auth-api" ]; then
-      k8s_api_ingress_master_dev $dotenv ./ops/k8s/master.yml
-    fi
-    if [ "$DL_APP3" = "api" ]; then
-      k8s_api_ingress_minion_dev $dotenv ./ops/k8s/minion.yml
-    fi
-    if [ "$DL_APP3" = "app" ]; then
-      k8s_app_ingress_dev $dotenv ./ops/k8s/ing.yml
-    fi
-    if [ "$DL_APP3" = "svc" ]; then
-      k8s_app_ingress_dev $dotenv ./ops/k8s/ing.yml
-    fi
-    if [ "$DL_APP3" = "api-v1" ]; then
-      k8s_app_ingress_dev $dotenv ./ops/k8s/ing.yml
-    fi
-    if [ "$DL_APP3" = "app-v1" ]; then
-      k8s_app_ingress_dev $dotenv ./ops/k8s/ing.yml
-    fi
-  fi
-
-  if [[ "$branch" = "release/dev" ]]; then
-
-    if [ "$DL_APP_NAME" = "dles-auth-api" ]; then
-      k8s_api_ingress_master_dev $dotenv ./ops/k8s/master.yml
-    fi
-    if [ "$DL_APP3" = "api" ]; then
-      k8s_api_ingress_minion_dev $dotenv ./ops/k8s/minion.yml
-    fi
-    if [ "$DL_APP3" = "app" ]; then
-      k8s_app_ingress_dev $dotenv ./ops/k8s/ing.yml
-    fi
-    if [ "$DL_APP3" = "svc" ]; then
-      k8s_app_ingress_dev $dotenv ./ops/k8s/ing.yml
-    fi
-    if [ "$DL_APP3" = "api-v1" ]; then
-      k8s_app_ingress_dev $dotenv ./ops/k8s/ing.yml
-    fi
-    if [ "$DL_APP3" = "app-v1" ]; then
-      k8s_app_ingress_dev $dotenv ./ops/k8s/ing.yml
-    fi
-  fi
-
-  if [[ "$branch" = "release/prev" ]]; then
-
-    if [ "$DL_APP_NAME" = "dles-auth-api" ]; then
-      k8s_api_ingress_master_prev $dotenv ./ops/k8s/master.yml
-    fi
-    if [ "$DL_APP3" = "api" ]; then
-      k8s_api_ingress_minion_prev $dotenv ./ops/k8s/minion.yml
-    fi
-    if [ "$DL_APP3" = "app" ]; then
-      k8s_app_ingress_prev $dotenv ./ops/k8s/ing.yml
-    fi
-    if [ "$DL_APP3" = "svc" ]; then
-      k8s_app_ingress_prev $dotenv ./ops/k8s/ing.yml
-    fi
-    if [ "$DL_APP3" = "api-v1" ]; then
-      k8s_app_ingress_prev $dotenv ./ops/k8s/ing.yml
-    fi
-    if [ "$DL_APP3" = "app-v1" ]; then
-      k8s_app_ingress_prev $dotenv ./ops/k8s/ing.yml
-    fi
-  fi
-
-  if [[ "$branch" = "release/k8s-prod" ]]; then
-
-    if [ "$DL_APP_NAME" = "dles-auth-api" ]; then
-      k8s_api_ingress_master_prod $dotenv ./ops/k8s/master.yml
-    fi
-    if [ "$DL_APP3" = "api" ]; then
-      k8s_api_ingress_minion_prod $dotenv ./ops/k8s/minion.yml
-    fi
-    if [ "$DL_APP3" = "app" ]; then
-      k8s_app_ingress_prod $dotenv ./ops/k8s/ing.yml
-    fi
-    if [ "$DL_APP3" = "svc" ]; then
-      k8s_app_ingress_prod $dotenv ./ops/k8s/ing.yml
-    fi
-    if [ "$DL_APP3" = "api-v1" ]; then
-      k8s_app_ingress_prod $dotenv ./ops/k8s/ing.yml
-    fi
-    if [ "$DL_APP3" = "app-v1" ]; then
-      k8s_app_ingress_prod $dotenv ./ops/k8s/ing.yml
-    fi
-  fi
-
-  if [[ "$branch" = "release/prod" ]]; then
-
-    if [ "$DL_APP_NAME" = "dles-auth-api" ]; then
-      k8s_api_ingress_master_prod $dotenv ./ops/k8s/master.yml
-    fi
-    if [ "$DL_APP3" = "api" ]; then
-      k8s_api_ingress_minion_prod $dotenv ./ops/k8s/minion.yml
-    fi
-    if [ "$DL_APP3" = "app" ]; then
-      k8s_app_ingress_prod $dotenv ./ops/k8s/ing.yml
-    fi
-    if [ "$DL_APP3" = "svc" ]; then
-      k8s_app_ingress_prod $dotenv ./ops/k8s/ing.yml
-    fi
-    if [ "$DL_APP3" = "api-v1" ]; then
-      k8s_app_ingress_prod $dotenv ./ops/k8s/ing.yml
-    fi
-    if [ "$DL_APP3" = "app-v1" ]; then
-      k8s_app_ingress_prod $dotenv ./ops/k8s/ing.yml
-    fi
-  fi
-}
 
 function k8s_hpa_dev {
   # script to generate k8s manifest file from a template file
@@ -2775,11 +2337,11 @@ function deploy_ci_cd {
 #---------------------------------------#
 function k8s_create_manifests {
   make
-  dev
+  # dev
   rm -rf ./ops/k8s/*
   k8s_app_deployment
   k8s_app_env $dotenv ./ops/k8s/template.yml ./ops/k8s/app.yml
-  k8s_app_ingress
+  k8s_ingress_app $dotenv ./ops/k8s/ing.yml
   k8s_autoscaling
   k8s_app_secret $dotenv ./ops/k8s/secret.yml
 }
@@ -2793,7 +2355,7 @@ function k8s_full_deploy {
   docker_push yes
   k8s_app_deployment
   k8s_app_env $dotenv ./ops/k8s/template.yml ./ops/k8s/app.yml
-  k8s_app_ingress
+  k8s_ingress_app $dotenv ./ops/k8s/ing.yml
   k8s_autoscaling
   k8s_app_secret $dotenv ./ops/k8s/secret.yml
   k8s_seal_app_secret ./ops/k8s/secret.yml ./ops/k8s/ssecret.yml
@@ -2808,7 +2370,7 @@ function k8s_mini_deploy {
   set_kube_context $K8S_CONTEXT $K8S_NAMESPACE
   k8s_app_deployment
   k8s_app_env $dotenv ./ops/k8s/template.yml ./ops/k8s/app.yml
-  k8s_app_ingress
+  k8s_ingress_app $dotenv ./ops/k8s/ing.yml
   k8s_autoscaling
   k8s_app_secret $dotenv ./ops/k8s/secret.yml
   k8s_seal_app_secret ./ops/k8s/secret.yml ./ops/k8s/ssecret.yml
